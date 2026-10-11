@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dịch trực tiếp Anh ⇄ Việt</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --fg: #111827; --muted: #6b7280;
+    --accent: #2563eb; --danger: #dc2626; --border: #e5e7eb;
+    --fs: 20px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0b1020; --card: #151b2e; --fg: #f3f4f6; --muted: #9ca3af; --accent: #60a5fa; --border: #27304a; }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  header { padding: 10px 12px; background: var(--card); border-bottom: 1px solid var(--border); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .row:last-child { margin-bottom: 0; }
+  select, input, button {
+    font: inherit; color: var(--fg); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+  }
+  input[type="password"], input[type="text"] { flex: 1; min-width: 140px; }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); color: #fff; border-color: transparent; font-weight: 600; flex: 1; min-width: 110px; }
+  button.primary.running { background: var(--danger); }
+  button:disabled, select:disabled { opacity: .5; cursor: not-allowed; }
+  label { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  #status { font-size: 13px; color: var(--muted); min-height: 18px; }
+  main { flex: 1; min-height: 0; display: flex; gap: 12px; padding: 12px; }
+  #left { flex: 1.65; min-width: 0; overflow-y: auto; }
+  #right {
+    flex: 1; min-width: 0; align-self: flex-start; max-height: 100%; overflow-y: auto;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px;
+  }
+  .sum-head { display: flex; justify-content: space-between; align-items: center; font-weight: 700; margin-bottom: 8px; }
+  .sum-head button { padding: 4px 10px; font-size: 14px; }
+  .sum-text { white-space: pre-line; font-size: calc(var(--fs) * .85); }
+  #sumList { display: flex; flex-direction: column; }
+  #sumTime { margin: 8px 0; }
+  @media (max-width: 760px) {
+    main { flex-direction: column; overflow-y: auto; }
+    #left { flex: none; overflow: visible; }
+    #right { flex: none; max-height: none; align-self: stretch; }
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
+  }
+  .time { font-size: 12px; color: var(--muted); font-family: ui-monospace, Menlo, monospace; }
+  .src { color: var(--muted); font-size: calc(var(--fs) * .8); margin: 2px 0 4px; }
+  .dst { font-size: var(--fs); font-weight: 650; }
+  #partial { color: var(--muted); font-style: italic; font-size: calc(var(--fs) * .8); padding: 4px 2px 12px; min-height: 1.5em; }
+  .hint { font-size: 12px; color: var(--muted); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="row">
+    <select id="dir" aria-label="Chiều dịch">
+      <option value="en-vi">Anh → Việt</option>
+      <option value="vi-en">Việt → Anh</option>
+    </select>
+    <select id="provider" aria-label="Công cụ dịch">
+      <option value="mymemory">Dịch: MyMemory (miễn phí)</option>
+      <option value="gemini">Dịch: Gemini (miễn phí — nhập key)</option>
+      <option value="muse">Dịch: Muse API (Meta — nhập key)</option>
+      <option value="browser">Dịch: Trình duyệt (Chrome máy tính)</option>
+    </select>
+  </div>
+  <div class="row hidden" id="keyRow">
+    <input id="apiKey" type="password" placeholder="API key (chỉ lưu trên máy này)" autocomplete="off">
+  </div>
+  <div class="row hidden" id="emailRow">
+    <input id="mmEmail" type="text" placeholder="Email của bạn — tăng hạn mức MyMemory miễn phí lên 50.000 ký tự/ngày (không bắt buộc)" autocomplete="email">
+  </div>
+  <div class="row">
+    <button id="toggle" class="primary">Bắt đầu</button>
+    <button id="download">Tải .txt</button>
+    <button id="copy">Sao chép</button>
+    <button id="clear">Xoá</button>
+  </div>
+  <div class="row">
+    <label>Cỡ chữ <input id="fs" type="range" min="14" max="40" value="20"></label>
+    <span id="status"></span>
+  </div>
+</header>
+
+<main>
+  <section id="left" aria-label="Bản dịch trực tiếp">
+    <div id="list">
+      <div id="partial"></div>
+    </div>
+  </section>
+  <aside id="right" aria-label="Tóm tắt cuộc hội thoại">
+    <div class="sum-head"><span>Tóm tắt</span><button id="sumNow" title="Tóm tắt ngay">↻</button></div>
+    <div id="sumTime" class="hint"></div>
+    <div id="sumList"></div>
+  </aside>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  // Model dự phòng nếu không lấy được danh sách model từ Google.
+  // Đã test thực tế trên key thật (11/10/2026):
+  //   gemini-3.6-flash      → OK, nhanh nhất (~0.9s)
+  //   gemini-3.5-flash      → OK (~1.0s)
+  //   gemini-3.1-flash-lite → OK (~2.9s)
+  //   gemini-3.8-flash / 3.7-flash → hay bị 503/timeout trên gói miễn phí
+  const GEMINI_FALLBACK_MODEL = 'gemini-3.6-flash';
+  const GEMINI_BACKUP_MODELS = ['gemini-3.5-flash', 'gemini-3.1-flash-lite'];
+  const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
+  const DIRS = {
+    'en-vi': { rec: 'en-US', src: 'en', dst: 'vi', srcName: 'English', dstName: 'Vietnamese', srcTag: 'EN', dstTag: 'VI' },
+    'vi-en': { rec: 'vi-VN', src: 'vi', dst: 'en', srcName: 'Vietnamese', dstName: 'English', srcTag: 'VI', dstTag: 'EN' },
+  };
+
+  let rec = null;
+  let running = false;
+  let wakeLock = null;
+  let lastFinal = '';
+  let lastFinalAt = 0;
+  const translators = {};
+  let log = [];
+  try { log = JSON.parse(localStorage.getItem('lt_log') || '[]'); } catch (_) { log = []; }
+
+  // ---------- Cài đặt ----------
+  const settings = { dir: 'en-vi', provider: 'mymemory', fs: 20 };
+  try { Object.assign(settings, JSON.parse(localStorage.getItem('lt_settings') || '{}')); } catch (_) {}
+  // Nếu cài đặt cũ còn provider đã bị xoá, quay về mặc định
+  if (![...$('provider').options].some((o) => o.value === settings.provider)) {
+    settings.provider = 'mymemory';
+  }
+  $('dir').value = settings.dir;
+  $('provider').value = settings.provider;
+  $('fs').value = settings.fs;
+  document.documentElement.style.setProperty('--fs', settings.fs + 'px');
+  try { $('apiKey').value = localStorage.getItem('lt_key') || ''; } catch (_) {}
+  try { $('mmEmail').value = localStorage.getItem('lt_email') || ''; } catch (_) {}
+
+  function saveSettings() {
+    try { localStorage.setItem('lt_settings', JSON.stringify(settings)); } catch (_) {}
+  }
+  function saveLog() {
+    try { localStorage.setItem('lt_log', JSON.stringify(log)); } catch (_) {}
+  }
+  function setStatus(t) { $('status').textContent = t || ''; }
+  function D() { return DIRS[$('dir').value]; }
+
+  function refreshProviderUI() {
+    const p = $('provider').value;
+    $('keyRow').classList.toggle('hidden', p !== 'muse' && p !== 'gemini');
+    $('emailRow').classList.toggle('hidden', p !== 'mymemory');
+    $('apiKey').placeholder = p === 'gemini'
+      ? 'Google AI Studio API key (lấy miễn phí tại aistudio.google.com — chỉ lưu trên máy này)'
+      : 'Meta API key (lấy tại dev.meta.ai — chỉ lưu trên máy này)';
+  }
+  if (!('Translator' in self)) {
+    const opt = $('provider').querySelector('option[value="browser"]');
+    opt.disabled = true;
+    opt.textContent = 'Dịch: Trình duyệt (máy bạn chưa hỗ trợ)';
+    if (settings.provider === 'browser') { $('provider').value = 'mymemory'; settings.provider = 'mymemory'; }
+  }
+  refreshProviderUI();
+
+  $('dir').onchange = () => { settings.dir = $('dir').value; saveSettings(); };
+  $('provider').onchange = () => { settings.provider = $('provider').value; saveSettings(); refreshProviderUI(); refreshSummaryUI(); if (pendingSum.length) scheduleSummary(); };
+  $('fs').oninput = () => {
+    settings.fs = +$('fs').value; saveSettings();
+    document.documentElement.style.setProperty('--fs', settings.fs + 'px');
+  };
+  $('apiKey').onchange = () => { try { localStorage.setItem('lt_key', $('apiKey').value.trim()); } catch (_) {} };
+  $('mmEmail').onchange = () => { try { localStorage.setItem('lt_email', $('mmEmail').value.trim()); } catch (_) {} };
+
+  // ---------- Hiển thị ----------
+  const list = $('list');
+  const leftPane = $('left');
+  function addCard(entry) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const time = document.createElement('div'); time.className = 'time'; time.textContent = entry.t;
+    const src = document.createElement('div'); src.className = 'src'; src.textContent = entry.src;
+    const dst = document.createElement('div'); dst.className = 'dst'; dst.textContent = entry.dst ?? '…';
+    card.append(time, src, dst);
+    list.insertBefore(card, $('partial'));
+    leftPane.scrollTop = leftPane.scrollHeight;
+    return { dst };
+  }
+  log.forEach(addCard);
+
+  // ---------- Dịch ----------
+  async function translate(text, d, onToken) {
+    const p = $('provider').value;
+
+    if (p === 'mymemory') {
+      const email = ($('mmEmail').value || '').trim();
+      const url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text) +
+                  '&langpair=' + d.src + '|' + d.dst +
+                  (email ? '&de=' + encodeURIComponent(email) : '');
+      const r = await fetch(url);
+      if (!r.ok) throw new Error('MyMemory HTTP ' + r.status);
+      const j = await r.json();
+      const out = j?.responseData?.translatedText;
+      if (!out) throw new Error('MyMemory không trả kết quả');
+      return out;
+    }
+
+    if (p === 'gemini') {
+      const key = $('apiKey').value.trim();
+      if (!key) throw new Error('Chưa nhập API key');
+      const out = await geminiTranslate(text, d, key, onToken);
+      if (!out) throw new Error('Gemini không trả kết quả');
+      return out;
+    }
+
+    if (p === 'muse') {
+      const key = $('apiKey').value.trim();
+      if (!key) throw new Error('Chưa nhập API key');
+      const r = await fetch('https://api.meta.ai/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'authorization': 'Bearer ' + key,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'muse-spark-1-3',
+          max_tokens: 1000,
+          system: `You are a live interpreter. Translate the user's speech from ${d.srcName} to ${d.dstName}. ` +
+                  `The text comes from automatic speech recognition and may contain small errors; infer the intended meaning. ` +
+                  `Output only the translation, nothing else.`,
+          messages: [{ role: 'user', content: text }],
+        }),
+      });
+      if (!r.ok) throw new Error('Muse HTTP ' + r.status);
+      const j = await r.json();
+      return (j.content || []).map((c) => c.text || '').join('').trim();
+    }
+
+    if (p === 'browser') {
+      const t = await getTranslator(d);
+      return await t.translate(text);
+    }
+    throw new Error('Công cụ dịch không hợp lệ');
+  }
+
+  // Đọc thông báo lỗi thật từ Google để dễ chẩn đoán (vd. key sai, model không tồn tại)
+  async function geminiErr(r, label) {
+    let detail = '';
+    try { const ej = await r.json(); detail = ej?.error?.message || ''; } catch (_) {}
+    return label + ' HTTP ' + r.status + (detail ? ' — ' + detail : '');
+  }
+
+  // Body dùng chung cho mọi lần gọi Gemini
+  function geminiBody(text, d) {
+    return JSON.stringify({
+      system_instruction: { parts: [{ text:
+        `You are a live interpreter. Translate the user's speech from ${d.srcName} to ${d.dstName}. ` +
+        `The text comes from automatic speech recognition and may contain small errors; infer the intended meaning. ` +
+        `Output only the translation, nothing else.` }] },
+      contents: [{ parts: [{ text: text }] }],
+      // thinkingBudget: 0 = tắt chế độ "suy nghĩ" của model → trả lời nhanh hơn, rẻ hơn.
+      // Dịch câu ngắn không cần suy luận nên tắt là hợp lý.
+      generationConfig: { maxOutputTokens: 500, temperature: 0.2, thinkingConfig: { thinkingBudget: 0 } },
+    });
+  }
+
+  // Gọi streaming: chữ dịch hiện dần ngay khi model nhả ra (onToken),
+  // thay vì đợi cả câu. Trả về bản dịch đầy đủ. Ném lỗi có .code = HTTP status.
+  async function geminiStreamCall(model, body, key, onToken) {
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
+                model + ':streamGenerateContent?alt=sse&key=' + encodeURIComponent(key);
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      signal: AbortSignal.timeout(20000), // quá 20s → coi như nghẽn, thử lại thay vì treo mãi ở "…"
+      body: body,
+    });
+    if (!r.ok) {
+      const err = new Error(await geminiErr(r, 'Gemini'));
+      err.code = r.status;
+      throw err;
+    }
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '', full = '', raw = '';
+    const feed = (chunkText) => {
+      for (const line of chunkText.split('\n')) {
+        const t = line.trim();
+        if (!t.startsWith('data:')) continue;
+        const data = t.slice(5).trim();
+        if (!data || data === '[DONE]') continue;
+        try {
+          const j = JSON.parse(data);
+          const piece = ((j.candidates || [])[0]?.content?.parts || []).map((c) => c.text || '').join('');
+          if (piece) { full += piece; if (onToken) onToken(full); }
+        } catch (_) {}
+      }
+    };
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const text_ = decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+        raw += text_;
+        buf += text_;
+        let idx;
+        while ((idx = buf.indexOf('\n\n')) >= 0) {
+          feed(buf.slice(0, idx));
+          buf = buf.slice(idx + 2);
+        }
+      }
+      feed(buf); // gói cuối có thể không kết thúc bằng dòng trống → xử lý nốt phần còn lại
+    } finally {
+      try { reader.cancel(); } catch (_) {}
+    }
+    if (!full.trim()) {
+      // Dự phòng: server trả về 1 object JSON thường thay vì SSE
+      try {
+        const j = JSON.parse(raw.trim());
+        const cands = j.candidates || [];
+        full = cands.map((c) => (((c.content || {}).parts) || []).map((p) => p.text || '').join('')).join('');
+        if (full && onToken) onToken(full);
+      } catch (_) {}
+    }
+    return full;
+  }
+
+  // Thử lần lượt các model trong danh sách ids (có streaming).
+  //  - 404/400: model không dùng được → đổi model khác ngay
+  //  - 429/503/timeout/mạng: nghẽn tạm thời → chờ 2s thử lại 1 lần, vẫn lỗi thì đổi model
+  //  - 401/403: key sai / không có quyền → dừng luôn, báo lỗi
+  // Model chạy được sẽ được lưu lại để lần sau dùng ngay, khỏi tìm lại.
+  async function tryGeminiModels(body, key, ids, onToken) {
+    let lastErr = null;
+    for (const model of ids) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const out = await geminiStreamCall(model, body, key, onToken);
+          if (!out.trim()) { lastErr = new Error('Gemini: không trả kết quả'); break; }
+          try { localStorage.setItem('lt_gemini_model', model); } catch (_) {}
+          return out;
+        } catch (e) {
+          const code = e.code || (e && e.name === 'AbortError' ? 'TIMEOUT' : 0);
+          if (code === 404 || code === 400) { lastErr = e; break; }
+          if (code === 401 || code === 403) throw e;
+          lastErr = (code === 'TIMEOUT') ? new Error('Gemini: quá thời gian chờ') : e;
+          if (attempt === 0) { await sleep(2000); continue; }
+          break;
+        }
+      }
+    }
+    throw lastErr || new Error('Gemini: không có model nào hoạt động');
+  }
+
+  // Lấy thêm các model flash khác từ Google (chỉ gọi khi model chính bị 404)
+  async function geminiCatalogModels(key, skip) {
+    const ids = [];
+    try {
+      const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + encodeURIComponent(key));
+      if (r.ok) {
+        const j = await r.json();
+        const models = (j.models || [])
+          .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+          .filter((m) => !/tts|image/i.test(m.name)); // bỏ model chuyên giọng nói / tạo ảnh
+        const flashes = models.filter((m) => /flash/i.test(m.name));
+        (flashes.length ? flashes : models).forEach((m) => {
+          const id = m.name.replace(/^models\//, '');
+          if (!skip.includes(id) && !ids.includes(id)) ids.push(id);
+        });
+      }
+    } catch (_) {}
+    return ids;
+  }
+
+  // Danh sách model thử nhanh (không tốn thêm lần gọi mạng nào)
+  function geminiQuickIds() {
+    const quick = [];
+    try { const c = localStorage.getItem('lt_gemini_model'); if (c && !quick.includes(c)) quick.push(c); } catch (_) {}
+    [GEMINI_FALLBACK_MODEL, ...GEMINI_BACKUP_MODELS].forEach((m) => { if (!quick.includes(m)) quick.push(m); });
+    return quick;
+  }
+
+  // Chạy 1 request Gemini (dịch hoặc tóm tắt đều dùng chung): thử model nhanh trước,
+  // chỉ khi tất cả đều lỗi kiểu "model không dùng được" mới gọi thêm 1 lần lấy
+  // danh sách model từ Google.
+  async function geminiRunWithFallback(body, key, onToken) {
+    const quick = geminiQuickIds();
+    const run = (ids) => tryGeminiModels(body, key, ids, onToken);
+    try {
+      return await run(quick);
+    } catch (e) {
+      const code = e.code || 0;
+      if (code !== 404 && code !== 400) throw e; // key sai / hết quota / mạng lỗi → báo luôn, không thử tiếp
+      const extra = await geminiCatalogModels(key, quick);
+      if (!extra.length) throw e;
+      return await run(extra);
+    }
+  }
+
+  async function geminiTranslate(text, d, key, onToken) {
+    return geminiRunWithFallback(geminiBody(text, d), key, onToken);
+  }
+
+  async function geminiSummarize(prevSummary, texts, langName, key, onToken) {
+    const body = JSON.stringify({
+      system_instruction: { parts: [{ text:
+        `You summarize a live interpreted conversation. Write in ${langName}. ` +
+        `Given the previous summary (may be empty) and new utterances, produce an updated concise summary. ` +
+        `Rules: short bullet lines starting with "- ", only the key points, no preamble. Output only the summary, nothing else.` }] },
+      contents: [{ parts: [{ text:
+        (prevSummary ? '[Previous summary]\n' + prevSummary + '\n\n' : '') +
+        '[New utterances]\n' + texts.map((t) => '- ' + t).join('\n') }] }],
+      generationConfig: { maxOutputTokens: 500, temperature: 0.3, thinkingConfig: { thinkingBudget: 0 } },
+    });
+    return geminiRunWithFallback(body, key, onToken);
+  }
+
+  // Tóm tắt qua Muse API (Meta) — cùng endpoint với dịch, chỉ khác prompt
+  async function museSummarize(prevSummary, texts, langName, key) {
+    const r = await fetch('https://api.meta.ai/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'authorization': 'Bearer ' + key,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'muse-spark-1-3',
+        max_tokens: 600,
+        system: `You summarize a live interpreted conversation. Write in ${langName}. ` +
+                `Given the previous summary (may be empty) and new utterances, produce an updated concise summary. ` +
+                `Rules: short bullet lines starting with "- ", only the key points, no preamble. Output only the summary, nothing else.`,
+        messages: [{ role: 'user', content:
+          (prevSummary ? '[Previous summary]\n' + prevSummary + '\n\n' : '') +
+          '[New utterances]\n' + texts.map((t) => '- ' + t).join('\n') }],
+      }),
+    });
+    if (!r.ok) throw new Error('Muse HTTP ' + r.status);
+    const j = await r.json();
+    const out = (j.content || []).map((c) => c.text || '').join('').trim();
+    if (!out) throw new Error('Muse không trả kết quả');
+    return out;
+  }
+
+  // ---------- Tóm tắt hội thoại (panel bên phải) ----------
+  // Gom các câu đã dịch, mỗi vài câu (hoặc vài giây sau câu cuối) gọi model
+  // tạo bản tóm tắt mới. Các bản tóm tắt CŨ được GIỮ LẠI như bên dịch
+  // (hiển thị nối tiếp theo thời gian, không ghi đè). Dùng tóm tắt tăng dần
+  // nên mỗi lần chỉ tốn 1 request nhỏ, xong trong <3s.
+  let sumLog = [], pendingSum = [], summarizing = false, sumTimer = null, sumFails = 0;
+  const SUM_DEBOUNCE_MS = 3000, SUM_BATCH = 5, SUM_MAX_FAILS = 3;
+  try {
+    sumLog = JSON.parse(localStorage.getItem('lt_sumlog') || '[]');
+    if (!Array.isArray(sumLog)) sumLog = [];
+    const old = localStorage.getItem('lt_summary'); // chuyển bản tóm tắt cũ (nếu có) sang lịch sử
+    if (!sumLog.length && old) {
+      sumLog = [{ t: '', text: old }];
+      try { localStorage.removeItem('lt_summary'); } catch (_) {}
+      saveSumLog();
+    }
+  } catch (_) { sumLog = []; }
+
+  function saveSumLog() { try { localStorage.setItem('lt_sumlog', JSON.stringify(sumLog)); } catch (_) {} }
+  function prevSummary() { return sumLog.length ? sumLog[sumLog.length - 1].text : ''; }
+  function sumLangOK() { const p = $('provider').value; return p === 'gemini' || p === 'muse'; }
+
+  function renderSumCard(entry, noScroll) {
+    const card = document.createElement('div');
+    card.className = 'card sum-card';
+    const time = document.createElement('div'); time.className = 'time'; time.textContent = entry.t;
+    const txt = document.createElement('div'); txt.className = 'sum-text'; txt.textContent = entry.text;
+    card.append(time, txt);
+    $('sumList').append(card);
+    if (!noScroll) { const rp = $('right'); rp.scrollTop = rp.scrollHeight; }
+    return { card, txt };
+  }
+
+  function refreshSummaryUI() {
+    if (summarizing) return;
+    clearTimeout(sumTimer);
+    $('sumList').innerHTML = '';
+    if (!sumLog.length && !sumLangOK()) {
+      const d = document.createElement('div');
+      d.className = 'hint';
+      d.textContent = 'Tóm tắt cần chọn "Dịch: Gemini" hoặc "Dịch: Muse API".';
+      $('sumList').append(d);
+      $('sumTime').textContent = '';
+      return;
+    }
+    if (!sumLog.length) {
+      const d = document.createElement('div');
+      d.className = 'hint';
+      d.textContent = 'Chưa có nội dung…';
+      $('sumList').append(d);
+      return;
+    }
+    sumLog.forEach((e) => renderSumCard(e, true));
+    if (pendingSum.length) scheduleSummary();
+  }
+
+  function pushForSummary(dst) {
+    if (!dst || dst === '(không dịch được)') return;
+    sumFails = 0;
+    pendingSum.push(dst);
+    scheduleSummary();
+  }
+
+  function scheduleSummary() {
+    if (!sumLangOK()) return;
+    clearTimeout(sumTimer);
+    if (pendingSum.length >= SUM_BATCH) { doSummary(); return; }
+    sumTimer = setTimeout(doSummary, SUM_DEBOUNCE_MS);
+  }
+
+  async function doSummary() {
+    clearTimeout(sumTimer);
+    if (summarizing || !pendingSum.length || !sumLangOK()) return;
+    const p = $('provider').value;
+    const key = $('apiKey').value.trim();
+    if (!key) { $('sumTime').textContent = 'Chưa nhập API key'; return; }
+    summarizing = true;
+    const texts = pendingSum.splice(0, pendingSum.length);
+    const dd = D();
+    $('sumTime').textContent = 'Đang tóm tắt…';
+    const t = new Date().toLocaleTimeString('vi-VN', { hour12: false });
+    $('sumList').querySelectorAll('.hint').forEach((h) => h.remove()); // xoá gợi ý "Chưa có nội dung…" khi đã có tóm tắt thật
+    const view = renderSumCard({ t, text: '…' });
+    try {
+      let out;
+      if (p === 'gemini') {
+        out = await geminiSummarize(prevSummary(), texts, dd.dstName, key,
+          (partial) => { view.txt.textContent = partial; });
+      } else {
+        out = await museSummarize(prevSummary(), texts, dd.dstName, key);
+      }
+      out = (out || '').trim();
+      if (!out) throw new Error('Không tạo được tóm tắt');
+      const entry = { t, text: out };
+      sumLog.push(entry);
+      saveSumLog();
+      view.txt.textContent = out;
+      sumFails = 0;
+      $('sumTime').textContent = 'Cập nhật lúc ' + t;
+    } catch (err) {
+      view.card.remove();
+      pendingSum = texts.concat(pendingSum); // trả lại để thử lại sau
+      sumFails++;
+      $('sumTime').textContent = 'Lỗi tóm tắt: ' + err.message;
+    } finally {
+      summarizing = false;
+      if (pendingSum.length && sumFails < SUM_MAX_FAILS) scheduleSummary();
+    }
+  }
+  refreshSummaryUI(); // trạng thái ban đầu của panel tóm tắt (gọi ở đây vì các biến let phía trên cần được khởi tạo trước)
+
+  async function getTranslator(d) {
+    const k = d.src + '>' + d.dst;
+    if (!translators[k]) {
+      translators[k] = await Translator.create({ sourceLanguage: d.src, targetLanguage: d.dst });
+    }
+    return translators[k];
+  }
+
+  // ---------- Xử lý câu đã chốt ----------
+  function handleFinal(raw) {
+    const text = (raw || '').trim();
+    if (!text) return;
+    const now = Date.now();
+    if (text === lastFinal && now - lastFinalAt < 3000) return; // chống lặp trên Android
+    lastFinal = text; lastFinalAt = now;
+
+    const d = D();
+    const entry = {
+      t: new Date().toLocaleTimeString('vi-VN', { hour12: false }),
+      src: text, dst: null, s: d.srcTag, d: d.dstTag,
+    };
+    log.push(entry);
+    const card = addCard(entry);
+    translate(text, d, (partial) => { card.dst.textContent = partial; })
+      .then((out) => { entry.dst = out; card.dst.textContent = out; saveLog(); pushForSummary(out); })
+      .catch((err) => {
+        entry.dst = '(không dịch được)';
+        card.dst.textContent = entry.dst;
+        setStatus('Lỗi dịch: ' + err.message);
+        saveLog();
+      });
+    saveLog();
+  }
+
+  // ---------- Nhận dạng giọng nói ----------
+  function startRec() {
+    rec = new SR();
+    rec.lang = D().rec;
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+
+    rec.onresult = (e) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) handleFinal(r[0].transcript);
+        else interim += r[0].transcript;
+      }
+      $('partial').textContent = interim;
+      leftPane.scrollTop = leftPane.scrollHeight;
+    };
+    rec.onerror = (e) => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        stop();
+        setStatus('Chưa cấp quyền micro. Hãy cho phép micro cho trang này.');
+      } else if (e.error !== 'no-speech' && e.error !== 'aborted') {
+        setStatus('Lỗi nhận dạng: ' + e.error);
+      }
+    };
+    rec.onend = () => {
+      $('partial').textContent = '';
+      if (!running) return;
+      // Trình duyệt tự ngắt sau một lúc, nên tự bắt đầu lại
+      setTimeout(() => {
+        if (!running) return;
+        try { rec.start(); } catch (_) { try { startRec(); } catch (_) {} }
+      }, 250);
+    };
+    rec.start();
+  }
+
+  async function requestWakeLock() {
+    try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch (_) {}
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (running && document.visibilityState === 'visible') requestWakeLock();
+  });
+
+  async function start() {
+    if (!SR) { setStatus('Trình duyệt này không hỗ trợ nhận dạng giọng nói. Dùng Chrome (Android) hoặc Safari mới.'); return; }
+    if ($('provider').value === 'browser') {
+      try { await getTranslator(D()); } catch (err) { setStatus('Không khởi tạo được trình dịch: ' + err.message); return; }
+    }
+    running = true;
+    $('toggle').textContent = 'Dừng';
+    $('toggle').classList.add('running');
+    $('dir').disabled = true;
+    setStatus('Đang nghe... (' + D().rec + ')');
+    requestWakeLock();
+    startRec();
+  }
+
+  function stop() {
+    running = false;
+    try { rec && rec.stop(); } catch (_) {}
+    try { wakeLock && wakeLock.release(); } catch (_) {}
+    $('toggle').textContent = 'Bắt đầu';
+    $('toggle').classList.remove('running');
+    $('dir').disabled = false;
+    $('partial').textContent = '';
+    setStatus('Đã dừng');
+  }
+
+  $('toggle').onclick = () => (running ? stop() : start());
+
+  // ---------- Lưu / sao chép / xoá ----------
+  function buildText() {
+    return log.map((e) =>
+      `[${e.t}]\n  ${e.s || 'SRC'}: ${e.src}\n  ${e.d || 'DST'}: ${e.dst ?? ''}`
+    ).join('\n\n') + (log.length ? '\n' : '');
+  }
+  $('download').onclick = () => {
+    const blob = new Blob(['\ufeff' + buildText()], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    const d = new Date(), p = (n) => String(n).padStart(2, '0');
+    a.href = URL.createObjectURL(blob);
+    a.download = `transcript-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}.txt`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  $('copy').onclick = async () => {
+    try { await navigator.clipboard.writeText(buildText()); setStatus('Đã sao chép'); }
+    catch (_) { setStatus('Không sao chép được'); }
+  };
+  $('clear').onclick = () => {
+    if (!confirm('Xoá toàn bộ bản ghi đã lưu trên máy này?')) return;
+    log = []; saveLog();
+    list.querySelectorAll('.card').forEach((c) => c.remove());
+    sumLog = []; saveSumLog();
+    pendingSum = []; sumFails = 0; clearTimeout(sumTimer);
+    refreshSummaryUI();
+    setStatus('Đã xoá');
+  };
+  $('sumNow').onclick = () => {
+    if (!sumLangOK()) { setStatus('Tóm tắt cần chọn "Dịch: Gemini" hoặc "Dịch: Muse API".'); return; }
+    if (!pendingSum.length || summarizing) { setStatus('Chưa có câu mới để tóm tắt'); return; }
+    doSummary();
+  };
+
+  if (!SR) setStatus('Trình duyệt này chưa hỗ trợ nhận dạng giọng nói.');
+})();
+</script>
+</body>
+</html>
